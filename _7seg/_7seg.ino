@@ -34,6 +34,11 @@ int segF = 7; //Display pin 11
 int segG = 8; //Display pin 15
 int segDP = 2; //Display pin 7
 
+int state;
+
+volatile int res_value;
+volatile int res_mult;
+
 void setup() {                
   pinMode(segA, OUTPUT);
   pinMode(segB, OUTPUT);
@@ -50,27 +55,58 @@ void setup() {
   pinMode(digit4, OUTPUT);
   
   pinMode(13, OUTPUT);
+  
+  // Configure Timer0 to display digits every 10ms (100Hz)
+  // more info here: http://www.instructables.com/id/Arduino-Timer-Interrupts/
+  cli();//stop interrupts
+  //set timer0 interrupt at 100Hz
+  TCCR0A = 0;// set entire TCCR0A register to 0
+  TCCR0B = 0;// same for TCCR0B
+  TCNT0  = 0;//initialize counter value to 0
+  // set compare match register for 100hz increments
+  OCR0A = 155;// = (16*10^6) / (100*1024) - 1 (must be <256)
+  // turn on CTC mode
+  TCCR0A |= (1 << WGM01);
+  // Set CS01 and CS00 bits for 1024 prescaler
+  TCCR0B |= (1 << CS02) | (1 << CS00);   
+  // enable timer compare interrupt
+  TIMSK0 |= (1 << OCIE0A);
+  sei();//allow interrupts
+  
+  // states for the state machine
+  // more info here: http://hackaday.io/post/2774
+  #define CALCULATE    1
+  #define DISPLAY      2
+  state = 1;
+  
+}
+
+ISR(TIMER0_COMPA_vect){//timer0 interrupt 100Hz 
+  // toggle displayFlag
+  state = DISPLAY;
 }
 
 void loop() {
-  int res_value = 277;
-  int res_mult = 2; // multiplier on the form 10^x
-  displayNumber(res_value, res_mult);
-  //long startTime = millis();
-
-  //displayNumber(millis()/1000);
-  //while( (millis() - startTime) < 2000) {
-  //displayNumber(1217);
-  //}
-  //delay(1000);  
+  switch(state){
+    case CALCULATE:
+      //
+      res_value = 277;
+      res_mult = 2; // multiplier on the form 10^x
+    break;
+    case DISPLAY:
+      //
+      displayNumber(res_value, res_mult);
+    break;  
+    default:
+    break;
+  }
+  
+  
 }
-
-//Given a number, we display 10:22
-//After running through the 4 numbers, the display is left turned off
 
 //Display brightness
 //Each digit is on for a certain amount of microseconds
-//Then it is off until we have reached a total of 20ms for the function call
+//Then it is off until we have reached a total of 10ms for the function call
 //Let's assume each digit is on for 1000us
 //If each digit is on for 1ms, there are 4 digits, so the display is off for 16ms.
 //That's a ratio of 1ms to 16ms or 6.25% on time (PWM).
@@ -85,13 +121,12 @@ void loop() {
 //1 dim but readable in dark (0.28mA)
 
 void displayNumber(int res_value, int res_mult) {
-#define DISPLAY_BRIGHTNESS  500
-
-#define DIGIT_ON  HIGH
-#define DIGIT_OFF  LOW
-
+  #define DISPLAY_BRIGHTNESS  500
+  #define DIGIT_ON  HIGH
+  #define DIGIT_OFF  LOW
   long beginTime = millis();
   
+  //Correct the value to be displayed (those will have a decimal)
   switch(res_mult) {
     case 1:
       res_value *= 10;
@@ -101,8 +136,8 @@ void displayNumber(int res_value, int res_mult) {
       break;
   }
 
+  //Turn off every digit, then turn on with assigned value
   for(int digit = 4 ; digit > 0 ; digit--) {
-
     lightNothing();
     //Turn on a digit for a short amount of time
     switch(digit) {
@@ -120,6 +155,7 @@ void displayNumber(int res_value, int res_mult) {
       break;
     }
 
+    //Display the measure (Ohm, KOhm, or MOhm), and the DecimalPoint
     switch(res_mult) {
     case 0:
       if (digit == 4) lightOhm();
@@ -142,8 +178,9 @@ void displayNumber(int res_value, int res_mult) {
       if (digit == 2) lightDP();
       break;
     }
-      
-    if (digit != 4){//display the value of the resistor
+    
+    //Display every digit (3 digits) of the res_value  
+    if (digit != 4){
       if (digit == 1 && res_value % 10 == 0) {
         lightNothing();
       } else {
@@ -151,17 +188,6 @@ void displayNumber(int res_value, int res_mult) {
       }
       res_value /= 10;
     }    
-    
-    
-    
-//    //first display the multiple
-//    if (digit == 4){
-//      
-//    } else {
-//      //Turn on the right segments for this digit
-//      lightNumber(toDisplay % 10);
-//      toDisplay /= 10;
-//    }
 
     delayMicroseconds(DISPLAY_BRIGHTNESS); //Display this digit for a fraction of a second (between 1us and 5000us, 500 is pretty good)
 
@@ -174,8 +200,7 @@ void displayNumber(int res_value, int res_mult) {
     digitalWrite(digit3, DIGIT_OFF);
     digitalWrite(digit4, DIGIT_OFF);
   }
-
-  while( (millis() - beginTime) < 10) ; //Wait for 10ms to pass before we paint the display again
+  state = CALCULATE;
 }
 
 
