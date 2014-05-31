@@ -39,7 +39,30 @@ int state;
 volatile int res_value;
 volatile int res_mult;
 
-void setup() {                
+// voltage_divider part
+int analogPin = 3;
+int resSwitch = 12;
+
+int val = 0;                           // variable to store the value read
+float volt = 0.0;
+float valR1 = 0.0;
+float valR2 = 0.0;
+
+float valUt = 4.92;                    // exact value of the 5V on the board
+float R2Hmes = 100000.0 + 100.0;       // measured values of R
+float R2Lmes = 100.0 + 35.0;           // add internal resistor value
+float prevValR1 = 0.0;
+int valid = 0;
+
+void setup() {
+  Serial.begin(9600);                  //  setup serial
+  while (!Serial);
+
+  pinMode(resSwitch, INPUT);
+  valR2 = 100100.0;
+  res_value = 1;
+  res_mult = 9;
+  
   pinMode(segA, OUTPUT);
   pinMode(segB, OUTPUT);
   pinMode(segC, OUTPUT);
@@ -89,9 +112,63 @@ ISR(TIMER0_COMPA_vect){//timer0 interrupt 100Hz
 void loop() {
   switch(state){
     case CALCULATE:
+      val = analogRead(analogPin);         // read the input pin
+      volt = val * valUt / 1023.0 ;        // convert to Volts
+      //Serial.print(volt, 3);               // display on Serial with 3 decimals precision
+      //Serial.println(" V");
+      //Serial.print(valR2);
+      //Serial.println(" = R2");
+      valR1 = (float)valR2 * (valUt - volt) / volt;    // calculate R1 value
+      
+      if (valR1 == prevValR1) {            // check if identical to previous value and increment "valid"
+        valid++;
+      } else {
+        valid = 0;
+      }
+      prevValR1 = valR1;
+      
+      if (valid >= 3) {
+        if (valR1 < 2350 && valR2 > 50000.0) {                    // check if R1 is inside the "precision" zone
+          //Serial.println(" use lower R2");                      // and change R2 (+ reset valid) when needed.
+          pinMode(resSwitch, OUTPUT);
+          analogWrite(resSwitch, LOW);
+          valR2 = R2Lmes;
+          valid = 0;
+        } else if (valR1 > 2350 && valR2 < 50000.0) {
+          Serial.println(" use higher R2");
+          pinMode(resSwitch, INPUT);
+          valR2 = R2Hmes;
+          valid = 0;
+        //} else {
+        //  Serial.print(valR1);
+        //  Serial.println(" Ohms");
+        }
+      }
+      
+      if (valid >= 3) {
+        // transform R1 into res_value (2 digits) * 10^res_mult
+        // check if R1 is infinite (open circuit)
+        if (isinf(valR1)) {
+          res_mult = 9;
+        } else {
+          res_mult = 0;
+          //Serial.println(valR1 / 100);
+          while((valR1 / 100) >= 1) {
+            Serial.println(valR1);
+            valR1 /= 10;
+            res_mult++;
+          }
+          res_value = /valR1;
+          Serial.print("R1 =");
+          Serial.print(res_value);
+          Serial.print(" * 10^");
+          Serial.println(res_mult); 
+        }
+      }
+
       //
-      res_value = 277;
-      res_mult = 2; // multiplier on the form 10^x
+      //res_value = 277;
+      //res_mult = 2; // multiplier on the form 10^x
     break;
     case DISPLAY:
       //
@@ -181,7 +258,9 @@ void displayNumber(int res_value, int res_mult) {
     
     //Display every digit (3 digits) of the res_value  
     if (digit != 4){
-      if (digit == 1 && res_value % 10 == 0) {
+      if (res_mult == 9) {
+        lightIdle();
+      } else if (digit == 1 && res_value % 10 == 0) {      // TO BE CHECKED !!!
         lightNothing();
       } else {
         lightNumber(res_value % 10);
