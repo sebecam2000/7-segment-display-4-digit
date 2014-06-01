@@ -50,16 +50,16 @@ float valR2 = 0.0;
 
 float valUt = 4.92;                    // exact value of the 5V on the board
 float R2Hmes = 100000.0 + 100.0;       // measured values of R
-float R2Lmes = 100.0 + 35.0;           // add internal resistor value
+float R2Lmes = 100.0 + 35.0;           // add internal resistance
 float prevValR1 = 0.0;
 int valid = 0;
 
 void setup() {
-  Serial.begin(9600);                  //  setup serial
-  while (!Serial);
+  //Serial.begin(9600);                  //  setup serial
+  //while (!Serial);
 
   pinMode(resSwitch, INPUT);
-  valR2 = 100100.0;
+  valR2 = R2Hmes;
   res_value = 1;
   res_mult = 9;
   
@@ -113,12 +113,12 @@ void loop() {
   switch(state){
     case CALCULATE:
       val = analogRead(analogPin);         // read the input pin
-      volt = val * valUt / 1023.0 ;        // convert to Volts
+      volt = val * valUt / 1024.0 ;        // convert to Volts
       //Serial.print(volt, 3);               // display on Serial with 3 decimals precision
       //Serial.println(" V");
       //Serial.print(valR2);
       //Serial.println(" = R2");
-      valR1 = (float)valR2 * (valUt - volt) / volt;    // calculate R1 value
+      valR1 = (float)valR2 * volt / (valUt - volt);    // calculate R1 value
       
       if (valR1 == prevValR1) {            // check if identical to previous value and increment "valid"
         valid++;
@@ -131,12 +131,13 @@ void loop() {
         if (valR1 < 2350 && valR2 > 50000.0) {                    // check if R1 is inside the "precision" zone
           //Serial.println(" use lower R2");                      // and change R2 (+ reset valid) when needed.
           pinMode(resSwitch, OUTPUT);
-          analogWrite(resSwitch, LOW);
+          digitalWrite(resSwitch, HIGH);
           valR2 = R2Lmes;
           valid = 0;
         } else if (valR1 > 2350 && valR2 < 50000.0) {
-          Serial.println(" use higher R2");
+          //Serial.println(" use higher R2");
           pinMode(resSwitch, INPUT);
+          //digitalWrite(resSwitch, LOW);
           valR2 = R2Hmes;
           valid = 0;
         //} else {
@@ -148,21 +149,74 @@ void loop() {
       if (valid >= 3) {
         // transform R1 into res_value (2 digits) * 10^res_mult
         // check if R1 is infinite (open circuit)
-        if (isinf(valR1)) {
+        if (isinf(valR1) || valR1 > 10000000) {
           res_mult = 9;
         } else {
           res_mult = 0;
           //Serial.println(valR1 / 100);
           while((valR1 / 100) >= 1) {
-            Serial.println(valR1);
+            //Serial.println(valR1);
             valR1 /= 10;
             res_mult++;
           }
-          res_value = /valR1;
-          Serial.print("R1 =");
-          Serial.print(res_value);
-          Serial.print(" * 10^");
-          Serial.println(res_mult); 
+          //Serial.print("R1 =");
+          //Serial.print(res_value);
+          //Serial.print(" * 10^");
+          //Serial.println(res_mult);
+          
+          // calculate the nomitaed value of the resistance,
+          // knowing that error is 5% (standard)
+          if (valR1 > 0 && valR1 <= 9.5) {
+            res_value = valR1;
+          } else if (valR1 > 9.5 && valR1 <= 10.5) {
+            res_value = 10; 
+          } else if (valR1 > 10.5 && valR1 <= 11.55) {
+            res_value = 11;
+          } else if (valR1 > 11.55 && valR1 <= 12.6) {
+            res_value = 12;
+          } else if (valR1 > 12.6 && valR1 <= 13.65) {
+            res_value = 13;
+          } else if (valR1 > 13.65 && valR1 <= 15.75) {
+            res_value = 15;
+          } else if (valR1 > 15.75 && valR1 <= 16.8) {
+            res_value = 16;
+          } else if (valR1 > 16.8 && valR1 <= 18.9) {
+            res_value = 18;
+          } else if (valR1 > 18.9 && valR1 <= 21.0) {
+            res_value = 20;
+          } else if (valR1 > 21.0 && valR1 <= 23.1) {
+            res_value = 22;
+          } else if (valR1 > 23.1 && valR1 <= 25.2) {
+            res_value = 24;
+          } else if (valR1 > 25.2 && valR1 <= 28.35) {
+            res_value = 27;
+          } else if (valR1 > 28.35 && valR1 <= 31.5) {
+            res_value = 30;
+          } else if (valR1 > 31.5 && valR1 <= 37.8) {
+            res_value = 36;
+          } else if (valR1 > 37.8 && valR1 <= 40.95) {
+            res_value = 39;
+          } else if (valR1 > 40.95 && valR1 <= 45.15) {
+            res_value = 43;
+          } else if (valR1 > 45.15 && valR1 <= 49.35) {
+            res_value = 47;
+          } else if (valR1 > 49.35 && valR1 <= 53.55) {
+            res_value = 51;
+          } else if (valR1 > 53.55 && valR1 <= 58.8) {
+            res_value = 56;
+          } else if (valR1 > 58.8 && valR1 <= 65.1) {
+            res_value = 62;
+          } else if (valR1 > 65.1 && valR1 <= 71.4) {
+            res_value = 68;
+          } else if (valR1 > 71.4 && valR1 <= 78.75) {
+            res_value = 75;
+          } else if (valR1 > 78.75 && valR1 <= 86.1) {
+            res_value = 82;
+          } else if (valR1 > 86.1 && valR1 <= 95.55) {
+            res_value = 91;
+          } else if (valR1 > 95.55 && valR1 <= 100) {
+            res_value = 1.1;
+          }
         }
       }
 
